@@ -1,0 +1,192 @@
+/* ===== Reset ===== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* ===== Theme ===== */
+:root {
+  --bg: #0b1220;
+  --card: #121a2b;
+  --border: #1f2a44;
+  --primary: #3b82f6;
+  --fail: #ef4444;
+  --text: #e5e7eb;
+  --text-sub: #94a3b8;
+  --font: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+}
+
+/* ===== Body ===== */
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  padding: 24px;
+}
+
+/* ===== Layout ===== */
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* ===== Header ===== */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.header h1 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.header .actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ===== Buttons ===== */
+button {
+  border: none;
+  background: var(--primary);
+  color: white;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: 0.2s;
+}
+
+button:hover {
+  opacity: 0.85;
+}
+
+/* ===== Upload ===== */
+input[type="file"] {
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--text);
+}
+
+/* ===== KPI Cards ===== */
+/* ===== Card ===== */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.card-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--text-sub);
+}
+
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.02);
+}
+
+.meta-label {
+  color: var(--text-sub);
+  font-size: 11px;
+}
+
+.error-text {
+  min-height: 18px;
+  margin-top: 12px;
+  color: var(--fail);
+  font-size: 12px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+select {
+  min-width: 280px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--text);
+}
+
+/* ===== Table ===== */
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+th {
+  text-align: left;
+  padding: 10px;
+  color: var(--text-sub);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+
+td {
+  padding: 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+tr:hover {
+  background: rgba(59,130,246,0.08);
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 1000px) {
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .actions {
+    flex-wrap: wrap;
+  }
+
+  .meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  select {
+    width: 100%;
+    min-width: 0;
+  }
+}
