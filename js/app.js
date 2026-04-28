@@ -51,8 +51,21 @@ function formatPercent(value) {
   return `${value.toFixed(1)}%`;
 }
 
+function normalizeText(value) {
+  return String(value ?? "")
+    .replace(/\s+/g, "")
+    .replace(/[()]/g, "")
+    .trim();
+}
+
 function findColumn(columns, keyword) {
-  return columns.find((column) => String(column).includes(keyword)) ?? "";
+  const normalizedKeyword = normalizeText(keyword);
+
+  return (
+    columns.find((column) =>
+      normalizeText(column).includes(normalizedKeyword),
+    ) ?? ""
+  );
 }
 
 function buildLabel(row, systemKey, partKey, index) {
@@ -159,12 +172,12 @@ function summarizeRows(sheet, fields) {
 }
 
 function isDetailSheet(sheet) {
-  const hasId = sheet.headers.some((header) => String(header).includes("ID"));
+  const hasId = sheet.headers.some((header) => normalizeText(header).includes("ID"));
   const hasResult = sheet.headers.some((header) =>
-    String(header).includes("\uACB0\uACFC"),
+    normalizeText(header).includes(normalizeText("\uACB0\uACFC")),
   );
   const hasTotal = sheet.headers.some((header) =>
-    String(header).includes("\uCD1D \uC218\uB7C9"),
+    normalizeText(header).includes(normalizeText("\uCD1D \uC218\uB7C9")),
   );
 
   return hasId && hasResult && hasTotal;
@@ -176,30 +189,49 @@ function buildDetailSheetFallback(allSheets) {
     .map((sheet) => {
       const totalKey = findColumn(sheet.headers, KEYWORDS.total);
       const completedKey = findColumn(sheet.headers, KEYWORDS.completed);
+      const progressKey = sheet.headers.find((header) =>
+        normalizeText(header).includes(
+          normalizeText("\uC9C4\uCC99\uB960"),
+        ),
+      );
       const resultKey =
-        sheet.headers.find((header) => String(header).includes("\uACB0\uACFC")) ??
+        sheet.headers.find((header) =>
+          normalizeText(header).includes(normalizeText("\uACB0\uACFC")),
+        ) ??
         "";
 
       const summary = sheet.rows.reduce(
         (acc, row) => {
           const total = toNumber(row[totalKey]);
-          const completed = toNumber(row[completedKey]);
+          const completedRaw = toNumber(row[completedKey]);
+          const progressRaw = toPercent(row[progressKey]);
           const result = String(row[resultKey] ?? "").trim();
+          const completed =
+            completedRaw > 0
+              ? completedRaw
+              : progressRaw >= 100
+                ? total
+                : progressRaw > 0
+                  ? Math.round((progressRaw / 100) * total)
+                  : 0;
 
           acc.total += total;
           acc.completed += completed;
 
           if (result.includes("\uC131\uACF5")) {
             acc.success += completed || total;
+            acc.executed += completed || total;
           } else if (result.includes("\uC2E4\uD328")) {
             acc.fail += completed || total || 1;
+            acc.executed += completed || total || 1;
           } else {
+            acc.executed += completed;
             acc.pending += Math.max(0, total - completed);
           }
 
           return acc;
         },
-        { total: 0, completed: 0, success: 0, fail: 0, pending: 0 },
+        { total: 0, completed: 0, success: 0, fail: 0, pending: 0, executed: 0 },
       );
 
       const label = cleanDisplayLabel(sheet.name);
@@ -209,7 +241,7 @@ function buildDetailSheetFallback(allSheets) {
         total: summary.total,
         planned: summary.total,
         completed: summary.completed,
-        executed: summary.completed,
+        executed: summary.executed || summary.completed,
         success: summary.success,
         fail: summary.fail,
         pending: summary.pending || Math.max(0, summary.total - summary.completed),
@@ -230,15 +262,37 @@ function buildDetailSheetFallback(allSheets) {
     .filter((row) => row.total > 0);
 }
 
+function shouldUseFallbackRows(summaryRows, fallbackRows, fieldName) {
+  if (fallbackRows.length === 0) {
+    return false;
+  }
+
+  if (summaryRows.length === 0) {
+    return true;
+  }
+
+  const summaryValue = summaryRows.reduce(
+    (sum, row) => sum + toNumber(row[fieldName]),
+    0,
+  );
+  const fallbackValue = fallbackRows.reduce(
+    (sum, row) => sum + toNumber(row[fieldName]),
+    0,
+  );
+
+  return summaryValue === 0 && fallbackValue > 0;
+}
+
 function buildProgressDashboard(sheet, allSheets) {
+  const fallbackRows = buildDetailSheetFallback(allSheets);
   let rows = summarizeRows(sheet, {
     total: KEYWORDS.total,
     planned: KEYWORDS.planned,
     completed: KEYWORDS.completed,
   });
 
-  if (rows.length === 0 || rows.every((row) => row.total === 0)) {
-    rows = buildDetailSheetFallback(allSheets);
+  if (shouldUseFallbackRows(rows, fallbackRows, "completed")) {
+    rows = fallbackRows;
   }
 
   rows = rows.slice(0, 14);
@@ -335,6 +389,7 @@ function buildProgressDashboard(sheet, allSheets) {
 }
 
 function buildExecutionDashboard(sheet, allSheets) {
+  const fallbackRows = buildDetailSheetFallback(allSheets);
   let rows = summarizeRows(sheet, {
     total: KEYWORDS.total,
     executed: KEYWORDS.executed,
@@ -343,8 +398,11 @@ function buildExecutionDashboard(sheet, allSheets) {
     pending: KEYWORDS.pending,
   });
 
-  if (rows.length === 0 || rows.every((row) => row.total === 0)) {
-    rows = buildDetailSheetFallback(allSheets);
+  if (
+    shouldUseFallbackRows(rows, fallbackRows, "executed") ||
+    shouldUseFallbackRows(rows, fallbackRows, "success")
+  ) {
+    rows = fallbackRows;
   }
 
   rows = rows
@@ -436,6 +494,7 @@ function buildExecutionDashboard(sheet, allSheets) {
 }
 
 function buildQualityDashboard(sheet, allSheets) {
+  const fallbackRows = buildDetailSheetFallback(allSheets);
   let rows = summarizeRows(sheet, {
     total: KEYWORDS.total,
     completed: KEYWORDS.completed,
@@ -443,8 +502,11 @@ function buildQualityDashboard(sheet, allSheets) {
     fail: KEYWORDS.fail,
   });
 
-  if (rows.length === 0 || rows.every((row) => row.total === 0)) {
-    rows = buildDetailSheetFallback(allSheets);
+  if (
+    shouldUseFallbackRows(rows, fallbackRows, "completed") ||
+    shouldUseFallbackRows(rows, fallbackRows, "success")
+  ) {
+    rows = fallbackRows;
   }
 
   rows = rows.slice(0, 14);
@@ -539,14 +601,15 @@ function buildQualityDashboard(sheet, allSheets) {
 }
 
 function buildDefectDashboard(sheet, allSheets) {
+  const fallbackRows = buildDetailSheetFallback(allSheets);
   let rows = summarizeRows(sheet, {
     total: KEYWORDS.total,
     success: KEYWORDS.success,
     defect: KEYWORDS.defect,
   });
 
-  if (rows.length === 0 || rows.every((row) => row.total === 0)) {
-    rows = buildDetailSheetFallback(allSheets);
+  if (shouldUseFallbackRows(rows, fallbackRows, "success")) {
+    rows = fallbackRows;
   }
 
   rows = rows.slice(0, 14);
