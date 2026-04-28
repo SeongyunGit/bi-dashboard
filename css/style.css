@@ -11,9 +11,12 @@
   --card: #121a2b;
   --border: #1f2a44;
   --primary: #3b82f6;
+  --secondary: #22c55e;
+  --accent: #f59e0b;
   --fail: #ef4444;
   --text: #e5e7eb;
   --text-sub: #94a3b8;
+  --muted: #334155;
   --font: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
 }
 
@@ -136,6 +139,188 @@ select {
   color: var(--text);
 }
 
+.viz-surface {
+  margin-bottom: 18px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at top right, rgba(59,130,246,0.18), transparent 28%),
+    linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+}
+
+.viz-surface.progress {
+  background:
+    radial-gradient(circle at top right, rgba(59,130,246,0.2), transparent 28%),
+    linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+}
+
+.viz-surface.execution {
+  background:
+    radial-gradient(circle at top right, rgba(34,197,94,0.18), transparent 28%),
+    linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+}
+
+.viz-surface.quality {
+  background:
+    radial-gradient(circle at top right, rgba(245,158,11,0.18), transparent 28%),
+    linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+}
+
+.viz-surface.defect {
+  background:
+    radial-gradient(circle at top right, rgba(239,68,68,0.2), transparent 28%),
+    linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+}
+
+.viz-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 18px;
+}
+
+.viz-eyebrow {
+  color: var(--text-sub);
+  font-size: 11px;
+  margin-bottom: 6px;
+}
+
+.viz-title {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.viz-legend {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: var(--text-sub);
+  font-size: 11px;
+}
+
+.viz-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.viz-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.viz-legend-dot.primary,
+.viz-bar.primary,
+.viz-segment.primary {
+  background: linear-gradient(90deg, #60a5fa, #3b82f6);
+}
+
+.viz-legend-dot.secondary,
+.viz-bar.secondary,
+.viz-segment.secondary {
+  background: linear-gradient(90deg, #4ade80, #22c55e);
+}
+
+.viz-legend-dot.danger,
+.viz-segment.danger {
+  background: linear-gradient(90deg, #fb7185, #ef4444);
+}
+
+.viz-legend-dot.muted,
+.viz-segment.muted {
+  background: linear-gradient(90deg, #64748b, #334155);
+}
+
+.viz-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.viz-metric {
+  padding: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  background: rgba(8, 15, 28, 0.5);
+}
+
+.viz-metric-label {
+  display: block;
+  color: var(--text-sub);
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+
+.viz-metric-value {
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.viz-chart {
+  display: grid;
+  gap: 12px;
+}
+
+.viz-chart-row {
+  display: grid;
+  gap: 8px;
+}
+
+.viz-chart-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.viz-chart-label {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.viz-chart-detail {
+  font-size: 11px;
+  color: var(--text-sub);
+}
+
+.viz-bars {
+  display: grid;
+  gap: 6px;
+}
+
+.viz-bar-track,
+.viz-stack {
+  width: 100%;
+  height: 12px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(148,163,184,0.12);
+}
+
+.viz-bar-track.thin {
+  height: 8px;
+}
+
+.viz-bar {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.viz-stack {
+  display: flex;
+}
+
+.viz-segment {
+  display: block;
+  height: 100%;
+}
+
 /* ===== Table ===== */
 .table-wrap {
   overflow-x: auto;
@@ -183,6 +368,14 @@ tr:hover {
   .toolbar {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .viz-header {
+    flex-direction: column;
+  }
+
+  .viz-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   select {
