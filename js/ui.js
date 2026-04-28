@@ -109,7 +109,7 @@ function renderDashboard(target, dashboard) {
   target.innerHTML = `
     <section class="dashboard-hero">
       <div class="dashboard-copy">
-        <p class="dashboard-kicker">BI Visualization</p>
+        <p class="dashboard-kicker">BI VISUALIZATION</p>
         <h2 class="dashboard-title">${dashboard.title}</h2>
         <p class="dashboard-subtitle">${dashboard.subtitle}</p>
       </div>
