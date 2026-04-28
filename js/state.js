@@ -5,6 +5,7 @@ const defaultState = Object.freeze({
   selectedSheetName: "",
   tableRows: [],
   tableColumns: [],
+  visualization: null,
   error: null,
   status: "idle",
 });
