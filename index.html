@@ -1,5 +1,59 @@
-<input type="file" id="excelUpload" accept=".xlsx,.xls,.xlsm" />
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BI Dashboard</title>
+    <link rel="stylesheet" href="./css/style.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header class="header">
+        <div>
+          <h1>BI Dashboard</h1>
+        </div>
+        <div class="actions">
+          <input id="file-input" type="file" accept=".xlsm,.xlsx,.xls" />
+          <button id="parse-button" type="button">Parse</button>
+          <button id="download-button" type="button" disabled>Download</button>
+          <button id="reset-button" type="button">Reset</button>
+        </div>
+      </header>
 
-<button onclick="downloadCSV()">CSV 다운로드</button>
+      <section class="card">
+        <div class="card-title">State</div>
+        <div class="meta-grid">
+          <div class="meta-item">
+            <span class="meta-label">Status</span>
+            <strong id="status">idle</strong>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">File</span>
+            <strong id="file-name">No file</strong>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Rows</span>
+            <strong id="row-count">0</strong>
+          </div>
+        </div>
+        <p id="error" class="error-text"></p>
+      </section>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+      <section class="card">
+        <div class="card-title">Sheet View</div>
+        <div class="toolbar">
+          <label for="sheet-select">Sheet</label>
+          <select id="sheet-select">
+            <option value="">Select a sheet</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table id="data-table"></table>
+        </div>
+      </section>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script type="module" src="./js/app.js"></script>
+  </body>
+</html>
