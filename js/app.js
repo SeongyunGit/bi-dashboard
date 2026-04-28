@@ -2,12 +2,11 @@ import { parseWorkbook } from "./parser.js";
 import { createState } from "./state.js";
 import { createUI } from "./ui.js";
 
-const KO = {
-  progressSheet: "\uB2E8\uC704\uD14C\uC2A4\uD2B8 \uC9C4\uD589\uD604\uD669",
-  executionSheet: "\uB2E8\uC704\uD14C\uC2A4\uD2B8 \uC218\uD589\uD604\uD669",
-  qualitySheet: "\uB2E8\uC704\uD14C\uC2A4\uD2B8 \uD488\uC9C8\uD604\uD669",
-  defectSheet:
-    "\uB2E8\uC704\uD14C\uC2A4\uD2B8 \uACB0\uD568\uBC1C\uC0DD\uD604\uD669",
+const KEYWORDS = {
+  progress: "\uC9C4\uD589\uD604\uD669",
+  execution: "\uC218\uD589\uD604\uD669",
+  quality: "\uD488\uC9C8\uD604\uD669",
+  defect: "\uACB0\uD568\uBC1C\uC0DD\uD604\uD669",
   system: "\uC2DC\uC2A4\uD15C",
   part: "\uD30C\uD2B8",
   total: "\uCD1D \uC218\uB7C9",
@@ -18,20 +17,13 @@ const KO = {
   planVsActual: "\uACC4\uD68D \uB300\uBE44 \uC2E4\uC81C",
   executed: "\uB204\uC801 \uC218\uD589 \uC218",
   successAccum: "\uB204\uC801 \uC131\uACF5\uC218",
+  success: "\uC131\uACF5\uC218",
   fail: "\uC2E4\uD328\uC218",
   pending: "\uBBF8\uC218\uD589\uC218",
-  success: "\uC131\uACF5\uC218",
   successRate: "\uC131\uACF5\uB960",
   defect: "\uACB0\uD568\uC218",
   defectRate: "\uACB0\uD568\uB960",
 };
-
-const SPECIAL_SHEET_BUILDERS = [
-  { match: KO.progressSheet, build: buildProgressVisualization },
-  { match: KO.executionSheet, build: buildExecutionVisualization },
-  { match: KO.qualitySheet, build: buildQualityVisualization },
-  { match: KO.defectSheet, build: buildDefectVisualization },
-];
 
 function toNumber(value) {
   if (typeof value === "number") {
@@ -39,23 +31,31 @@ function toNumber(value) {
   }
 
   if (typeof value === "string") {
-    const normalized = value.replace(/,/g, "").trim();
-    const parsed = Number(normalized);
+    const parsed = Number(value.replace(/,/g, "").trim());
     return Number.isFinite(parsed) ? parsed : 0;
   }
 
   return 0;
 }
 
-function asPercent(value) {
+function toPercent(value) {
   const numeric = toNumber(value);
-  if (numeric <= 1 && numeric >= -1) {
-    return numeric * 100;
-  }
-  return numeric;
+  return numeric >= -1 && numeric <= 1 ? numeric * 100 : numeric;
 }
 
-function safeLabel(row, systemKey, partKey, index) {
+function clampPercent(value) {
+  return Math.max(0, Math.min(100, value));
+}
+
+function formatPercent(value) {
+  return `${value.toFixed(1)}%`;
+}
+
+function findColumn(columns, keyword) {
+  return columns.find((column) => String(column).includes(keyword)) ?? "";
+}
+
+function buildLabel(row, systemKey, partKey, index) {
   const system = String(row[systemKey] ?? "").trim();
   const part = String(row[partKey] ?? "").trim();
 
@@ -71,295 +71,556 @@ function safeLabel(row, systemKey, partKey, index) {
   return `Row ${index + 1}`;
 }
 
-function findColumn(columns, keywords) {
-  return (
-    columns.find((column) =>
-      keywords.every((keyword) => String(column).includes(keyword)),
-    ) ?? ""
-  );
+function createCard(label, value, tone = "default") {
+  return { label, value: String(value), tone };
 }
 
-function metric(label, value) {
-  return { label, value: String(value) };
-}
-
-function buildVisualization(sheet) {
-  const builder = SPECIAL_SHEET_BUILDERS.find((item) =>
-    sheet.name.includes(item.match),
-  );
-  return builder ? builder.build(sheet) : null;
-}
-
-function selectSheetData(sheets, sheetName) {
-  const selectedSheet =
-    sheets.find((sheet) => sheet.name === sheetName) ?? sheets[0] ?? null;
-
+function createBarDataset(label, data, color) {
   return {
-    selectedSheetName: selectedSheet?.name ?? "",
-    tableColumns: selectedSheet?.headers ?? [],
-    tableRows: selectedSheet?.rows ?? [],
-    visualization: selectedSheet ? buildVisualization(selectedSheet) : null,
+    label,
+    data,
+    backgroundColor: color,
+    borderRadius: 8,
+    maxBarThickness: 18,
   };
 }
 
-function buildProgressVisualization(sheet) {
-  const systemKey = findColumn(sheet.headers, [KO.system]);
-  const partKey = findColumn(sheet.headers, [KO.part]);
-  const totalKey = findColumn(sheet.headers, [KO.total]);
-  const plannedKey = findColumn(sheet.headers, [KO.planned]);
-  const completedKey = findColumn(sheet.headers, [KO.completed]);
-  const planRateKey = findColumn(sheet.headers, [KO.planRate]);
-  const actualRateKey = findColumn(sheet.headers, [KO.actualRate]);
-  const gapKey = findColumn(sheet.headers, [KO.planVsActual]);
-
-  const rows = sheet.rows
-    .map((row, index) => ({
-      label: safeLabel(row, systemKey, partKey, index),
-      total: toNumber(row[totalKey]),
-      planned: toNumber(row[plannedKey]),
-      completed: toNumber(row[completedKey]),
-      planRate: asPercent(row[planRateKey]),
-      actualRate: asPercent(row[actualRateKey]),
-      gap: asPercent(row[gapKey]),
-    }))
-    .filter((row) => row.total > 0);
-
-  const totals = rows.reduce(
-    (acc, row) => {
-      acc.total += row.total;
-      acc.planned += row.planned;
-      acc.completed += row.completed;
-      return acc;
-    },
-    { total: 0, planned: 0, completed: 0 },
-  );
-
+function createLineDataset(label, data, color) {
   return {
-    type: "progress",
-    title: "Progress Overview",
-    accent: "progress",
-    metrics: [
-      metric("Total Cases", totals.total),
-      metric("Planned", totals.planned),
-      metric("Completed", totals.completed),
-      metric(
-        "Completion Rate",
-        totals.total > 0
-          ? `${((totals.completed / totals.total) * 100).toFixed(1)}%`
-          : "0.0%",
-      ),
-    ],
-    chartTitle: "Plan vs Actual Progress",
-    rows: rows
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 10)
-      .map((row) => ({
-        label: row.label,
-        primary: Math.max(0, Math.min(100, row.planRate)),
-        secondary: Math.max(0, Math.min(100, row.actualRate)),
-        detail: `Gap ${row.gap.toFixed(1)}%`,
-      })),
-    legend: [
-      { label: "Plan", tone: "primary" },
-      { label: "Actual", tone: "secondary" },
-    ],
+    label,
+    data,
+    borderColor: color,
+    backgroundColor: color,
+    pointRadius: 3,
+    pointHoverRadius: 4,
+    tension: 0.32,
   };
 }
 
-function buildExecutionVisualization(sheet) {
-  const systemKey = findColumn(sheet.headers, [KO.system]);
-  const partKey = findColumn(sheet.headers, [KO.part]);
-  const totalKey = findColumn(sheet.headers, [KO.total]);
-  const executedKey = findColumn(sheet.headers, [KO.executed]);
-  const successKey = findColumn(sheet.headers, [KO.successAccum]);
-  const failKey = findColumn(sheet.headers, [KO.fail]);
-  const pendingKey = findColumn(sheet.headers, [KO.pending]);
+function summarizeRows(sheet, fields) {
+  const systemKey = findColumn(sheet.headers, KEYWORDS.system);
+  const partKey = findColumn(sheet.headers, KEYWORDS.part);
 
-  const rows = sheet.rows
+  return sheet.rows
     .map((row, index) => {
-      const total = toNumber(row[totalKey]);
-      const executed = toNumber(row[executedKey]);
-      const fail = toNumber(row[failKey]);
-      const pending = pendingKey
-        ? toNumber(row[pendingKey])
-        : Math.max(0, total - executed);
-
-      return {
-        label: safeLabel(row, systemKey, partKey, index),
-        total,
-        executed,
-        success: toNumber(row[successKey]),
-        fail,
-        pending,
+      const summary = {
+        label: buildLabel(row, systemKey, partKey, index),
+        planRate: toPercent(row[findColumn(sheet.headers, KEYWORDS.planRate)]),
+        actualRate: toPercent(row[findColumn(sheet.headers, KEYWORDS.actualRate)]),
+        successRate: toPercent(
+          row[findColumn(sheet.headers, KEYWORDS.successRate)],
+        ),
+        defectRate: toPercent(row[findColumn(sheet.headers, KEYWORDS.defectRate)]),
+        gap: toPercent(row[findColumn(sheet.headers, KEYWORDS.planVsActual)]),
       };
+
+      Object.entries(fields).forEach(([name, keyword]) => {
+        summary[name] = toNumber(row[findColumn(sheet.headers, keyword)]);
+      });
+
+      return summary;
     })
     .filter((row) => row.total > 0);
+}
 
-  const totals = rows.reduce(
-    (acc, row) => {
-      acc.total += row.total;
-      acc.executed += row.executed;
-      acc.success += row.success;
-      acc.fail += row.fail;
-      acc.pending += row.pending;
-      return acc;
-    },
-    { total: 0, executed: 0, success: 0, fail: 0, pending: 0 },
-  );
+function buildProgressDashboard(sheet) {
+  const rows = summarizeRows(sheet, {
+    total: KEYWORDS.total,
+    planned: KEYWORDS.planned,
+    completed: KEYWORDS.completed,
+  }).slice(0, 14);
+
+  const total = rows.reduce((sum, row) => sum + row.total, 0);
+  const planned = rows.reduce((sum, row) => sum + row.planned, 0);
+  const completed = rows.reduce((sum, row) => sum + row.completed, 0);
+  const remaining = Math.max(0, total - completed);
 
   return {
-    type: "execution",
-    title: "Execution Overview",
-    accent: "execution",
-    metrics: [
-      metric("Total Cases", totals.total),
-      metric("Executed", totals.executed),
-      metric("Failed", totals.fail),
-      metric("Pending", totals.pending),
+    title: "Progress Dashboard",
+    subtitle: "Plan, actual progress, completion, and gap in one place",
+    cards: [
+      createCard("Total Cases", total, "primary"),
+      createCard("Planned", planned, "secondary"),
+      createCard("Completed", completed, "accent"),
+      createCard("Remaining", remaining, "muted"),
     ],
-    chartTitle: "Execution Distribution",
-    rows: rows
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 10)
-      .map((row) => ({
-        label: row.label,
-        segments: [
-          { label: "Executed", value: row.executed, tone: "primary" },
-          { label: "Failed", value: row.fail, tone: "danger" },
-          { label: "Pending", value: row.pending, tone: "muted" },
-        ],
-        total: row.total,
-      })),
-    legend: [
-      { label: "Executed", tone: "primary" },
-      { label: "Failed", tone: "danger" },
-      { label: "Pending", tone: "muted" },
+    charts: [
+      {
+        key: "progress-volume",
+        title: "Planned vs Completed Cases",
+        type: "bar",
+        data: {
+          labels: rows.map((row) => row.label),
+          datasets: [
+            createBarDataset("Planned", rows.map((row) => row.planned), "#60a5fa"),
+            createBarDataset(
+              "Completed",
+              rows.map((row) => row.completed),
+              "#22c55e",
+            ),
+          ],
+        },
+        options: groupedBarOptions(),
+      },
+      {
+        key: "progress-rate",
+        title: "Plan Rate vs Actual Rate",
+        type: "radar",
+        data: {
+          labels: rows.slice(0, 8).map((row) => row.label),
+          datasets: [
+            {
+              label: "Plan Rate",
+              data: rows.slice(0, 8).map((row) => clampPercent(row.planRate)),
+              borderColor: "#60a5fa",
+              backgroundColor: "rgba(96,165,250,0.18)",
+            },
+            {
+              label: "Actual Rate",
+              data: rows.slice(0, 8).map((row) => clampPercent(row.actualRate)),
+              borderColor: "#22c55e",
+              backgroundColor: "rgba(34,197,94,0.18)",
+            },
+          ],
+        },
+        options: radarOptions(),
+      },
+      {
+        key: "progress-donut",
+        title: "Completed vs Remaining",
+        type: "doughnut",
+        data: {
+          labels: ["Completed", "Remaining"],
+          datasets: [
+            {
+              data: [completed, remaining],
+              backgroundColor: ["#22c55e", "#334155"],
+              borderWidth: 0,
+            },
+          ],
+        },
+        options: doughnutOptions(),
+      },
+      {
+        key: "progress-gap",
+        title: "Progress Gap Trend",
+        type: "line",
+        data: {
+          labels: rows.map((row) => row.label),
+          datasets: [
+            createLineDataset(
+              "Gap",
+              rows.map((row) => clampPercent(row.gap)),
+              "#f59e0b",
+            ),
+          ],
+        },
+        options: lineOptions("%"),
+      },
     ],
   };
 }
 
-function buildQualityVisualization(sheet) {
-  const systemKey = findColumn(sheet.headers, [KO.system]);
-  const partKey = findColumn(sheet.headers, [KO.part]);
-  const totalKey = findColumn(sheet.headers, [KO.total]);
-  const completedKey = findColumn(sheet.headers, [KO.completed]);
-  const successKey = findColumn(sheet.headers, [KO.success]);
-  const failKey = findColumn(sheet.headers, [KO.fail]);
-  const successRateKey = findColumn(sheet.headers, [KO.successRate]);
-
-  const rows = sheet.rows
-    .map((row, index) => ({
-      label: safeLabel(row, systemKey, partKey, index),
-      total: toNumber(row[totalKey]),
-      completed: toNumber(row[completedKey]),
-      success: toNumber(row[successKey]),
-      fail: toNumber(row[failKey]),
-      successRate: asPercent(row[successRateKey]),
+function buildExecutionDashboard(sheet) {
+  const rows = summarizeRows(sheet, {
+    total: KEYWORDS.total,
+    executed: KEYWORDS.executed,
+    success: KEYWORDS.successAccum,
+    fail: KEYWORDS.fail,
+    pending: KEYWORDS.pending,
+  })
+    .map((row) => ({
+      ...row,
+      pending: row.pending || Math.max(0, row.total - row.executed),
     }))
-    .filter((row) => row.total > 0);
+    .slice(0, 14);
 
-  const totals = rows.reduce(
-    (acc, row) => {
-      acc.total += row.total;
-      acc.completed += row.completed;
-      acc.success += row.success;
-      acc.fail += row.fail;
-      return acc;
-    },
-    { total: 0, completed: 0, success: 0, fail: 0 },
-  );
+  const total = rows.reduce((sum, row) => sum + row.total, 0);
+  const executed = rows.reduce((sum, row) => sum + row.executed, 0);
+  const fail = rows.reduce((sum, row) => sum + row.fail, 0);
+  const pending = rows.reduce((sum, row) => sum + row.pending, 0);
 
   return {
-    type: "quality",
-    title: "Quality Overview",
-    accent: "quality",
-    metrics: [
-      metric("Total Cases", totals.total),
-      metric("Completed", totals.completed),
-      metric("Quality Pass", totals.success),
-      metric("Quality Fail", totals.fail),
+    title: "Execution Dashboard",
+    subtitle: "Execution, failures, pending load, and completion rate",
+    cards: [
+      createCard("Total Cases", total, "primary"),
+      createCard("Executed", executed, "secondary"),
+      createCard("Failed", fail, "danger"),
+      createCard("Pending", pending, "muted"),
     ],
-    chartTitle: "Quality Rate by Part",
-    rows: rows
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 10)
-      .map((row) => ({
-        label: row.label,
-        primary: Math.max(0, Math.min(100, row.successRate)),
-        secondary:
-          row.total > 0
-            ? Math.max(0, Math.min(100, (row.completed / row.total) * 100))
-            : 0,
-        detail: `Pass ${row.success} / Fail ${row.fail}`,
-      })),
-    legend: [
-      { label: "Quality Rate", tone: "primary" },
-      { label: "Completion", tone: "secondary" },
+    charts: [
+      {
+        key: "execution-stack",
+        title: "Execution Distribution by Part",
+        type: "bar",
+        data: {
+          labels: rows.map((row) => row.label),
+          datasets: [
+            createBarDataset(
+              "Executed",
+              rows.map((row) => row.executed),
+              "#60a5fa",
+            ),
+            createBarDataset("Failed", rows.map((row) => row.fail), "#f87171"),
+            createBarDataset("Pending", rows.map((row) => row.pending), "#475569"),
+          ],
+        },
+        options: stackedBarOptions(),
+      },
+      {
+        key: "execution-donut",
+        title: "Overall Execution Mix",
+        type: "doughnut",
+        data: {
+          labels: ["Executed", "Failed", "Pending"],
+          datasets: [
+            {
+              data: [executed, fail, pending],
+              backgroundColor: ["#60a5fa", "#f87171", "#475569"],
+              borderWidth: 0,
+            },
+          ],
+        },
+        options: doughnutOptions(),
+      },
+      {
+        key: "execution-line",
+        title: "Failure Line",
+        type: "line",
+        data: {
+          labels: rows.map((row) => row.label),
+          datasets: [
+            createLineDataset("Failed", rows.map((row) => row.fail), "#f87171"),
+          ],
+        },
+        options: lineOptions(""),
+      },
+      {
+        key: "execution-rate",
+        title: "Execution Rate",
+        type: "bar",
+        data: {
+          labels: rows.map((row) => row.label),
+          datasets: [
+            createBarDataset(
+              "Execution Rate",
+              rows.map((row) => (row.total > 0 ? (row.executed / row.total) * 100 : 0)),
+              "#22c55e",
+            ),
+          ],
+        },
+        options: percentBarOptions(),
+      },
     ],
   };
 }
 
-function buildDefectVisualization(sheet) {
-  const systemKey = findColumn(sheet.headers, [KO.system]);
-  const partKey = findColumn(sheet.headers, [KO.part]);
-  const totalKey = findColumn(sheet.headers, [KO.total]);
-  const successKey = findColumn(sheet.headers, [KO.success]);
-  const defectKey = findColumn(sheet.headers, [KO.defect]);
-  const defectRateKey = findColumn(sheet.headers, [KO.defectRate]);
+function buildQualityDashboard(sheet) {
+  const rows = summarizeRows(sheet, {
+    total: KEYWORDS.total,
+    completed: KEYWORDS.completed,
+    success: KEYWORDS.success,
+    fail: KEYWORDS.fail,
+  }).slice(0, 14);
 
-  const rows = sheet.rows
-    .map((row, index) => ({
-      label: safeLabel(row, systemKey, partKey, index),
-      total: toNumber(row[totalKey]),
-      success: toNumber(row[successKey]),
-      defect: toNumber(row[defectKey]),
-      defectRate: asPercent(row[defectRateKey]),
-    }))
-    .filter((row) => row.total > 0);
-
-  const totals = rows.reduce(
-    (acc, row) => {
-      acc.total += row.total;
-      acc.success += row.success;
-      acc.defect += row.defect;
-      return acc;
-    },
-    { total: 0, success: 0, defect: 0 },
-  );
+  const total = rows.reduce((sum, row) => sum + row.total, 0);
+  const completed = rows.reduce((sum, row) => sum + row.completed, 0);
+  const success = rows.reduce((sum, row) => sum + row.success, 0);
+  const fail = rows.reduce((sum, row) => sum + row.fail, 0);
 
   return {
-    type: "defect",
-    title: "Defect Overview",
-    accent: "defect",
-    metrics: [
-      metric("Total Cases", totals.total),
-      metric("Successful Runs", totals.success),
-      metric("Defects", totals.defect),
-      metric(
+    title: "Quality Dashboard",
+    subtitle: "Pass/fail quality view with completion and quality rates",
+    cards: [
+      createCard("Total Cases", total, "primary"),
+      createCard("Completed", completed, "secondary"),
+      createCard("Quality Pass", success, "accent"),
+      createCard("Quality Fail", fail, "danger"),
+    ],
+    charts: [
+      {
+        key: "quality-bar",
+        title: "Quality Pass vs Fail",
+        type: "bar",
+        data: {
+          labels: rows.map((row) => row.label),
+          datasets: [
+            createBarDataset("Pass", rows.map((row) => row.success), "#22c55e"),
+            createBarDataset("Fail", rows.map((row) => row.fail), "#f87171"),
+          ],
+        },
+        options: groupedBarOptions(),
+      },
+      {
+        key: "quality-donut",
+        title: "Quality Result Mix",
+        type: "doughnut",
+        data: {
+          labels: ["Pass", "Fail"],
+          datasets: [
+            {
+              data: [success, fail],
+              backgroundColor: ["#22c55e", "#f87171"],
+              borderWidth: 0,
+            },
+          ],
+        },
+        options: doughnutOptions(),
+      },
+      {
+        key: "quality-radar",
+        title: "Quality Rate vs Completion Rate",
+        type: "radar",
+        data: {
+          labels: rows.slice(0, 8).map((row) => row.label),
+          datasets: [
+            {
+              label: "Quality Rate",
+              data: rows.slice(0, 8).map((row) => clampPercent(row.successRate)),
+              borderColor: "#f59e0b",
+              backgroundColor: "rgba(245,158,11,0.18)",
+            },
+            {
+              label: "Completion Rate",
+              data: rows
+                .slice(0, 8)
+                .map((row) => (row.total > 0 ? (row.completed / row.total) * 100 : 0)),
+              borderColor: "#60a5fa",
+              backgroundColor: "rgba(96,165,250,0.16)",
+            },
+          ],
+        },
+        options: radarOptions(),
+      },
+      {
+        key: "quality-line",
+        title: "Quality Rate Trend",
+        type: "line",
+        data: {
+          labels: rows.map((row) => row.label),
+          datasets: [
+            createLineDataset(
+              "Quality Rate",
+              rows.map((row) => clampPercent(row.successRate)),
+              "#f59e0b",
+            ),
+          ],
+        },
+        options: lineOptions("%"),
+      },
+    ],
+  };
+}
+
+function buildDefectDashboard(sheet) {
+  const rows = summarizeRows(sheet, {
+    total: KEYWORDS.total,
+    success: KEYWORDS.success,
+    defect: KEYWORDS.defect,
+  }).slice(0, 14);
+
+  const total = rows.reduce((sum, row) => sum + row.total, 0);
+  const success = rows.reduce((sum, row) => sum + row.success, 0);
+  const defect = rows.reduce((sum, row) => sum + row.defect, 0);
+
+  return {
+    title: "Defect Dashboard",
+    subtitle: "Defects, defect rate, and part-level defect concentration",
+    cards: [
+      createCard("Total Cases", total, "primary"),
+      createCard("Successful Runs", success, "secondary"),
+      createCard("Defects", defect, "danger"),
+      createCard(
         "Defect Rate",
-        totals.success > 0
-          ? `${((totals.defect / totals.success) * 100).toFixed(1)}%`
-          : "0.0%",
+        success > 0 ? formatPercent((defect / success) * 100) : "0.0%",
+        "accent",
       ),
     ],
-    chartTitle: "Defect Rate by Part",
-    rows: rows
-      .sort((a, b) => b.defect - a.defect || b.total - a.total)
-      .slice(0, 10)
-      .map((row) => ({
-        label: row.label,
-        primary: Math.max(0, Math.min(100, row.defectRate)),
-        secondary:
-          row.total > 0
-            ? Math.max(0, Math.min(100, (row.defect / row.total) * 100))
-            : 0,
-        detail: `Defects ${row.defect}`,
-      })),
-    legend: [
-      { label: "Defect Rate", tone: "danger" },
-      { label: "Defects / Total", tone: "secondary" },
+    charts: [
+      {
+        key: "defect-bar",
+        title: "Defects by Part",
+        type: "bar",
+        data: {
+          labels: rows.map((row) => row.label),
+          datasets: [
+            createBarDataset("Defects", rows.map((row) => row.defect), "#f87171"),
+          ],
+        },
+        options: groupedBarOptions(),
+      },
+      {
+        key: "defect-line",
+        title: "Defect Rate Trend",
+        type: "line",
+        data: {
+          labels: rows.map((row) => row.label),
+          datasets: [
+            createLineDataset(
+              "Defect Rate",
+              rows.map((row) => clampPercent(row.defectRate)),
+              "#fb7185",
+            ),
+          ],
+        },
+        options: lineOptions("%"),
+      },
+      {
+        key: "defect-donut",
+        title: "Success vs Defect Mix",
+        type: "doughnut",
+        data: {
+          labels: ["Success", "Defect"],
+          datasets: [
+            {
+              data: [success, defect],
+              backgroundColor: ["#22c55e", "#f87171"],
+              borderWidth: 0,
+            },
+          ],
+        },
+        options: doughnutOptions(),
+      },
+      {
+        key: "defect-radar",
+        title: "Defect Rate vs Defect Load",
+        type: "radar",
+        data: {
+          labels: rows.slice(0, 8).map((row) => row.label),
+          datasets: [
+            {
+              label: "Defect Rate",
+              data: rows.slice(0, 8).map((row) => clampPercent(row.defectRate)),
+              borderColor: "#fb7185",
+              backgroundColor: "rgba(251,113,133,0.18)",
+            },
+            {
+              label: "Defect Load",
+              data: rows
+                .slice(0, 8)
+                .map((row) => (row.total > 0 ? (row.defect / row.total) * 100 : 0)),
+              borderColor: "#60a5fa",
+              backgroundColor: "rgba(96,165,250,0.14)",
+            },
+          ],
+        },
+        options: radarOptions(),
+      },
     ],
   };
+}
+
+function baseChartOptions() {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        labels: {
+          color: "#cbd5e1",
+          boxWidth: 12,
+        },
+      },
+    },
+    scales: {
+      x: {
+        ticks: { color: "#94a3b8" },
+        grid: { color: "rgba(148,163,184,0.08)" },
+      },
+      y: {
+        ticks: { color: "#94a3b8" },
+        grid: { color: "rgba(148,163,184,0.08)" },
+      },
+    },
+  };
+}
+
+function groupedBarOptions() {
+  return baseChartOptions();
+}
+
+function stackedBarOptions() {
+  const options = baseChartOptions();
+  options.scales.x.stacked = true;
+  options.scales.y.stacked = true;
+  return options;
+}
+
+function percentBarOptions() {
+  const options = baseChartOptions();
+  options.scales.y.min = 0;
+  options.scales.y.max = 100;
+  return options;
+}
+
+function lineOptions(suffix) {
+  const options = baseChartOptions();
+  options.scales.y.beginAtZero = true;
+  if (suffix) {
+    options.scales.y.ticks.callback = (value) => `${value}${suffix}`;
+  }
+  return options;
+}
+
+function doughnutOptions() {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    cutout: "70%",
+    plugins: {
+      legend: {
+        position: "bottom",
+        labels: {
+          color: "#cbd5e1",
+          boxWidth: 12,
+        },
+      },
+    },
+  };
+}
+
+function radarOptions() {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        labels: {
+          color: "#cbd5e1",
+        },
+      },
+    },
+    scales: {
+      r: {
+        min: 0,
+        max: 100,
+        angleLines: { color: "rgba(148,163,184,0.12)" },
+        grid: { color: "rgba(148,163,184,0.12)" },
+        pointLabels: { color: "#94a3b8", font: { size: 10 } },
+        ticks: {
+          color: "#94a3b8",
+          backdropColor: "transparent",
+        },
+      },
+    },
+  };
+}
+
+function buildDashboard(sheet) {
+  if (sheet.name.includes(KEYWORDS.progress)) {
+    return buildProgressDashboard(sheet);
+  }
+  if (sheet.name.includes(KEYWORDS.execution)) {
+    return buildExecutionDashboard(sheet);
+  }
+  if (sheet.name.includes(KEYWORDS.quality)) {
+    return buildQualityDashboard(sheet);
+  }
+  if (sheet.name.includes(KEYWORDS.defect)) {
+    return buildDefectDashboard(sheet);
+  }
+  return null;
 }
 
 function downloadJson(fileName, data) {
@@ -373,6 +634,18 @@ function downloadJson(fileName, data) {
   link.download = fileName;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+function selectSheetData(sheets, sheetName) {
+  const selectedSheet =
+    sheets.find((sheet) => sheet.name === sheetName) ?? sheets[0] ?? null;
+
+  return {
+    selectedSheetName: selectedSheet?.name ?? "",
+    tableColumns: selectedSheet?.headers ?? [],
+    tableRows: selectedSheet?.rows ?? [],
+    dashboard: selectedSheet ? buildDashboard(selectedSheet) : null,
+  };
 }
 
 function createDashboardApp(options = {}) {
