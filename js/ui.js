@@ -49,6 +49,96 @@ function renderRows(target, columns, rows) {
   target.innerHTML = `${head}<tbody>${body}</tbody>`;
 }
 
+function renderVisualization(target, visualization) {
+  if (!target) {
+    return;
+  }
+
+  if (!visualization) {
+    target.hidden = true;
+    target.innerHTML = "";
+    return;
+  }
+
+  const metrics = visualization.metrics
+    .map(
+      (metric) => `
+        <article class="viz-metric">
+          <span class="viz-metric-label">${metric.label}</span>
+          <strong class="viz-metric-value">${metric.value}</strong>
+        </article>
+      `,
+    )
+    .join("");
+
+  const legend = visualization.legend
+    .map(
+      (item) => `
+        <span class="viz-legend-item">
+          <i class="viz-legend-dot ${item.tone}"></i>
+          ${item.label}
+        </span>
+      `,
+    )
+    .join("");
+
+  const rows = visualization.rows
+    .map((row) => {
+      if (row.segments) {
+        const segments = row.segments
+          .map((segment) => {
+            const width =
+              row.total > 0 ? Math.max(0, (segment.value / row.total) * 100) : 0;
+            return `<span class="viz-segment ${segment.tone}" style="width:${width}%"></span>`;
+          })
+          .join("");
+
+        return `
+          <div class="viz-chart-row">
+            <div class="viz-chart-head">
+              <span class="viz-chart-label">${row.label}</span>
+              <span class="viz-chart-detail">${row.total}</span>
+            </div>
+            <div class="viz-stack">${segments}</div>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="viz-chart-row">
+          <div class="viz-chart-head">
+            <span class="viz-chart-label">${row.label}</span>
+            <span class="viz-chart-detail">${row.detail}</span>
+          </div>
+          <div class="viz-bars">
+            <div class="viz-bar-track">
+              <span class="viz-bar primary" style="width:${row.primary}%"></span>
+            </div>
+            <div class="viz-bar-track thin">
+              <span class="viz-bar secondary" style="width:${row.secondary}%"></span>
+            </div>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  target.hidden = false;
+  target.innerHTML = `
+    <section class="viz-surface ${visualization.accent}">
+      <div class="viz-header">
+        <div>
+          <p class="viz-eyebrow">${visualization.title}</p>
+          <h2 class="viz-title">${visualization.chartTitle}</h2>
+        </div>
+        <div class="viz-legend">${legend}</div>
+      </div>
+      <div class="viz-metrics">${metrics}</div>
+      <div class="viz-chart">${rows}</div>
+    </section>
+  `;
+}
+
 function renderSheetOptions(target, sheets, selectedSheetName) {
   if (!target) {
     return;
@@ -84,6 +174,9 @@ export function createUI(config = {}) {
   const rowCountText = resolveElement(config.rowCountText ?? "#row-count");
   const fileNameText = resolveElement(config.fileNameText ?? "#file-name");
   const sheetSelect = resolveElement(config.sheetSelect ?? "#sheet-select");
+  const visualizationContainer = resolveElement(
+    config.visualizationContainer ?? "#sheet-visualization",
+  );
   const tableContainer = resolveElement(config.tableContainer ?? "#data-table");
 
   function render(state) {
@@ -92,6 +185,7 @@ export function createUI(config = {}) {
     setText(rowCountText, state.tableRows.length, "0");
     setText(fileNameText, state.fileName, "No file");
     renderSheetOptions(sheetSelect, state.sheets, state.selectedSheetName);
+    renderVisualization(visualizationContainer, state.visualization);
     renderRows(tableContainer, state.tableColumns, state.tableRows);
 
     if (downloadButton) {
@@ -128,6 +222,7 @@ export function createUI(config = {}) {
       downloadButton,
       resetButton,
       sheetSelect,
+      visualizationContainer,
     },
     render,
     bindEvents,
