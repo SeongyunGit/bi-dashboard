@@ -123,12 +123,93 @@ function summarizeRows(sheet, fields) {
     .filter((row) => row.total > 0);
 }
 
-function buildProgressDashboard(sheet) {
-  const rows = summarizeRows(sheet, {
+function isDetailSheet(sheet) {
+  const hasId = sheet.headers.some((header) => String(header).includes("ID"));
+  const hasResult = sheet.headers.some((header) =>
+    String(header).includes("\uACB0\uACFC"),
+  );
+  const hasTotal = sheet.headers.some((header) =>
+    String(header).includes("\uCD1D \uC218\uB7C9"),
+  );
+
+  return hasId && hasResult && hasTotal;
+}
+
+function buildDetailSheetFallback(allSheets) {
+  return allSheets
+    .filter((sheet) => isDetailSheet(sheet))
+    .map((sheet) => {
+      const totalKey = findColumn(sheet.headers, KEYWORDS.total);
+      const completedKey = findColumn(sheet.headers, KEYWORDS.completed);
+      const resultKey =
+        sheet.headers.find((header) => String(header).includes("\uACB0\uACFC")) ??
+        "";
+
+      const summary = sheet.rows.reduce(
+        (acc, row) => {
+          const total = toNumber(row[totalKey]);
+          const completed = toNumber(row[completedKey]);
+          const result = String(row[resultKey] ?? "").trim();
+
+          acc.total += total;
+          acc.completed += completed;
+
+          if (result.includes("\uC131\uACF5")) {
+            acc.success += completed || total;
+          } else if (result.includes("\uC2E4\uD328")) {
+            acc.fail += completed || total || 1;
+          } else {
+            acc.pending += Math.max(0, total - completed);
+          }
+
+          return acc;
+        },
+        { total: 0, completed: 0, success: 0, fail: 0, pending: 0 },
+      );
+
+      const label = sheet.name
+        .replace(/\(.+?\)/g, "")
+        .replace(/_/g, " ")
+        .trim();
+
+      return {
+        label,
+        total: summary.total,
+        planned: summary.total,
+        completed: summary.completed,
+        executed: summary.completed,
+        success: summary.success,
+        fail: summary.fail,
+        pending: summary.pending || Math.max(0, summary.total - summary.completed),
+        planRate: summary.total > 0 ? (summary.total / summary.total) * 100 : 0,
+        actualRate:
+          summary.total > 0 ? (summary.completed / summary.total) * 100 : 0,
+        successRate:
+          summary.total > 0 ? (summary.success / summary.total) * 100 : 0,
+        defect: summary.fail,
+        defectRate:
+          summary.success > 0 ? (summary.fail / summary.success) * 100 : 0,
+        gap:
+          summary.total > 0
+            ? ((summary.total - summary.completed) / summary.total) * 100
+            : 0,
+      };
+    })
+    .filter((row) => row.total > 0);
+}
+
+function buildProgressDashboard(sheet, allSheets) {
+  let rows = summarizeRows(sheet, {
     total: KEYWORDS.total,
     planned: KEYWORDS.planned,
     completed: KEYWORDS.completed,
-  }).slice(0, 14);
+  });
+
+  if (rows.length === 0 || rows.every((row) => row.total === 0)) {
+    rows = buildDetailSheetFallback(allSheets);
+  }
+
+  rows = rows.slice(0, 14);
 
   const total = rows.reduce((sum, row) => sum + row.total, 0);
   const planned = rows.reduce((sum, row) => sum + row.planned, 0);
@@ -221,14 +302,20 @@ function buildProgressDashboard(sheet) {
   };
 }
 
-function buildExecutionDashboard(sheet) {
-  const rows = summarizeRows(sheet, {
+function buildExecutionDashboard(sheet, allSheets) {
+  let rows = summarizeRows(sheet, {
     total: KEYWORDS.total,
     executed: KEYWORDS.executed,
     success: KEYWORDS.successAccum,
     fail: KEYWORDS.fail,
     pending: KEYWORDS.pending,
-  })
+  });
+
+  if (rows.length === 0 || rows.every((row) => row.total === 0)) {
+    rows = buildDetailSheetFallback(allSheets);
+  }
+
+  rows = rows
     .map((row) => ({
       ...row,
       pending: row.pending || Math.max(0, row.total - row.executed),
@@ -316,13 +403,19 @@ function buildExecutionDashboard(sheet) {
   };
 }
 
-function buildQualityDashboard(sheet) {
-  const rows = summarizeRows(sheet, {
+function buildQualityDashboard(sheet, allSheets) {
+  let rows = summarizeRows(sheet, {
     total: KEYWORDS.total,
     completed: KEYWORDS.completed,
     success: KEYWORDS.success,
     fail: KEYWORDS.fail,
-  }).slice(0, 14);
+  });
+
+  if (rows.length === 0 || rows.every((row) => row.total === 0)) {
+    rows = buildDetailSheetFallback(allSheets);
+  }
+
+  rows = rows.slice(0, 14);
 
   const total = rows.reduce((sum, row) => sum + row.total, 0);
   const completed = rows.reduce((sum, row) => sum + row.completed, 0);
@@ -413,12 +506,18 @@ function buildQualityDashboard(sheet) {
   };
 }
 
-function buildDefectDashboard(sheet) {
-  const rows = summarizeRows(sheet, {
+function buildDefectDashboard(sheet, allSheets) {
+  let rows = summarizeRows(sheet, {
     total: KEYWORDS.total,
     success: KEYWORDS.success,
     defect: KEYWORDS.defect,
-  }).slice(0, 14);
+  });
+
+  if (rows.length === 0 || rows.every((row) => row.total === 0)) {
+    rows = buildDetailSheetFallback(allSheets);
+  }
+
+  rows = rows.slice(0, 14);
 
   const total = rows.reduce((sum, row) => sum + row.total, 0);
   const success = rows.reduce((sum, row) => sum + row.success, 0);
@@ -607,18 +706,18 @@ function radarOptions() {
   };
 }
 
-function buildDashboard(sheet) {
+function buildDashboard(sheet, allSheets) {
   if (sheet.name.includes(KEYWORDS.progress)) {
-    return buildProgressDashboard(sheet);
+    return buildProgressDashboard(sheet, allSheets);
   }
   if (sheet.name.includes(KEYWORDS.execution)) {
-    return buildExecutionDashboard(sheet);
+    return buildExecutionDashboard(sheet, allSheets);
   }
   if (sheet.name.includes(KEYWORDS.quality)) {
-    return buildQualityDashboard(sheet);
+    return buildQualityDashboard(sheet, allSheets);
   }
   if (sheet.name.includes(KEYWORDS.defect)) {
-    return buildDefectDashboard(sheet);
+    return buildDefectDashboard(sheet, allSheets);
   }
   return null;
 }
@@ -644,7 +743,7 @@ function selectSheetData(sheets, sheetName) {
     selectedSheetName: selectedSheet?.name ?? "",
     tableColumns: selectedSheet?.headers ?? [],
     tableRows: selectedSheet?.rows ?? [],
-    dashboard: selectedSheet ? buildDashboard(selectedSheet) : null,
+    dashboard: selectedSheet ? buildDashboard(selectedSheet, sheets) : null,
   };
 }
 
