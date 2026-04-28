@@ -145,6 +145,10 @@ function createLineDataset(label, data, color) {
   };
 }
 
+function topRadarRows(rows) {
+  return rows.slice(0, 12);
+}
+
 function summarizeRows(sheet, fields) {
   const systemKey = findColumn(sheet.headers, KEYWORDS.system);
   const partKey = findColumn(sheet.headers, KEYWORDS.part);
@@ -334,17 +338,17 @@ function buildProgressDashboard(sheet, allSheets) {
         title: "계획 진척률 대비 실제 진척률",
         type: "radar",
         data: {
-          labels: rows.slice(0, 8).map((row) => cleanDisplayLabel(row.label)),
+          labels: topRadarRows(rows).map((row) => cleanDisplayLabel(row.label)),
           datasets: [
             {
               label: "계획 진척률",
-              data: rows.slice(0, 8).map((row) => clampPercent(row.planRate)),
+              data: topRadarRows(rows).map((row) => clampPercent(row.planRate)),
               borderColor: "#60a5fa",
               backgroundColor: "rgba(96,165,250,0.18)",
             },
             {
               label: "실제 진척률",
-              data: rows.slice(0, 8).map((row) => clampPercent(row.actualRate)),
+              data: topRadarRows(rows).map((row) => clampPercent(row.actualRate)),
               borderColor: "#22c55e",
               backgroundColor: "rgba(34,197,94,0.18)",
             },
@@ -560,18 +564,17 @@ function buildQualityDashboard(sheet, allSheets) {
         title: "품질률 대비 완료율",
         type: "radar",
         data: {
-          labels: rows.slice(0, 8).map((row) => cleanDisplayLabel(row.label)),
+          labels: topRadarRows(rows).map((row) => cleanDisplayLabel(row.label)),
           datasets: [
             {
               label: "품질률",
-              data: rows.slice(0, 8).map((row) => clampPercent(row.successRate)),
+              data: topRadarRows(rows).map((row) => clampPercent(row.successRate)),
               borderColor: "#f59e0b",
               backgroundColor: "rgba(245,158,11,0.18)",
             },
             {
               label: "완료율",
-              data: rows
-                .slice(0, 8)
+              data: topRadarRows(rows)
                 .map((row) => (row.total > 0 ? (row.completed / row.total) * 100 : 0)),
               borderColor: "#60a5fa",
               backgroundColor: "rgba(96,165,250,0.16)",
@@ -681,18 +684,17 @@ function buildDefectDashboard(sheet, allSheets) {
         title: "결함률 대비 결함 부하",
         type: "radar",
         data: {
-          labels: rows.slice(0, 8).map((row) => cleanDisplayLabel(row.label)),
+          labels: topRadarRows(rows).map((row) => cleanDisplayLabel(row.label)),
           datasets: [
             {
               label: "결함률",
-              data: rows.slice(0, 8).map((row) => clampPercent(row.defectRate)),
+              data: topRadarRows(rows).map((row) => clampPercent(row.defectRate)),
               borderColor: "#fb7185",
               backgroundColor: "rgba(251,113,133,0.18)",
             },
             {
               label: "결함 부하",
-              data: rows
-                .slice(0, 8)
+              data: topRadarRows(rows)
                 .map((row) => (row.total > 0 ? (row.defect / row.total) * 100 : 0)),
               borderColor: "#60a5fa",
               backgroundColor: "rgba(96,165,250,0.14)",
