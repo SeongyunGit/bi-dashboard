@@ -86,7 +86,7 @@ function buildLabel(row, systemKey, partKey, index) {
 
 function cleanDisplayLabel(label) {
   return String(label)
-    .replace(/\([^)]*\)/g, "")
+    .replace(/\(([^)]*)\)/g, " / $1")
     .replace(/_/g, " ")
     .replace(/\s+/g, " ")
     .replace(/시스템 구축/g, "시스템")
