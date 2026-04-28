@@ -38,105 +38,13 @@ function renderRows(target, columns, rows) {
     .map(
       (row) => `
         <tr>
-          ${columns
-            .map((column) => `<td>${row[column] ?? ""}</td>`)
-            .join("")}
+          ${columns.map((column) => `<td>${row[column] ?? ""}</td>`).join("")}
         </tr>
       `,
     )
     .join("");
 
   target.innerHTML = `${head}<tbody>${body}</tbody>`;
-}
-
-function renderVisualization(target, visualization) {
-  if (!target) {
-    return;
-  }
-
-  if (!visualization) {
-    target.hidden = true;
-    target.innerHTML = "";
-    return;
-  }
-
-  const metrics = visualization.metrics
-    .map(
-      (metric) => `
-        <article class="viz-metric">
-          <span class="viz-metric-label">${metric.label}</span>
-          <strong class="viz-metric-value">${metric.value}</strong>
-        </article>
-      `,
-    )
-    .join("");
-
-  const legend = visualization.legend
-    .map(
-      (item) => `
-        <span class="viz-legend-item">
-          <i class="viz-legend-dot ${item.tone}"></i>
-          ${item.label}
-        </span>
-      `,
-    )
-    .join("");
-
-  const rows = visualization.rows
-    .map((row) => {
-      if (row.segments) {
-        const segments = row.segments
-          .map((segment) => {
-            const width =
-              row.total > 0 ? Math.max(0, (segment.value / row.total) * 100) : 0;
-            return `<span class="viz-segment ${segment.tone}" style="width:${width}%"></span>`;
-          })
-          .join("");
-
-        return `
-          <div class="viz-chart-row">
-            <div class="viz-chart-head">
-              <span class="viz-chart-label">${row.label}</span>
-              <span class="viz-chart-detail">${row.total}</span>
-            </div>
-            <div class="viz-stack">${segments}</div>
-          </div>
-        `;
-      }
-
-      return `
-        <div class="viz-chart-row">
-          <div class="viz-chart-head">
-            <span class="viz-chart-label">${row.label}</span>
-            <span class="viz-chart-detail">${row.detail}</span>
-          </div>
-          <div class="viz-bars">
-            <div class="viz-bar-track">
-              <span class="viz-bar primary" style="width:${row.primary}%"></span>
-            </div>
-            <div class="viz-bar-track thin">
-              <span class="viz-bar secondary" style="width:${row.secondary}%"></span>
-            </div>
-          </div>
-        </div>
-      `;
-    })
-    .join("");
-
-  target.hidden = false;
-  target.innerHTML = `
-    <section class="viz-surface ${visualization.accent}">
-      <div class="viz-header">
-        <div>
-          <p class="viz-eyebrow">${visualization.title}</p>
-          <h2 class="viz-title">${visualization.chartTitle}</h2>
-        </div>
-        <div class="viz-legend">${legend}</div>
-      </div>
-      <div class="viz-metrics">${metrics}</div>
-      <div class="viz-chart">${rows}</div>
-    </section>
-  `;
 }
 
 function renderSheetOptions(target, sheets, selectedSheetName) {
@@ -162,6 +70,60 @@ function renderSheetOptions(target, sheets, selectedSheetName) {
     .join("");
 }
 
+function renderDashboard(target, dashboard) {
+  if (!target) {
+    return [];
+  }
+
+  if (!dashboard) {
+    target.hidden = true;
+    target.innerHTML = "";
+    return [];
+  }
+
+  const cards = dashboard.cards
+    .map(
+      (card) => `
+        <article class="dash-card ${card.tone}">
+          <span class="dash-card-label">${card.label}</span>
+          <strong class="dash-card-value">${card.value}</strong>
+        </article>
+      `,
+    )
+    .join("");
+
+  const charts = dashboard.charts
+    .map(
+      (chart) => `
+        <section class="chart-card">
+          <div class="chart-card-title">${chart.title}</div>
+          <div class="chart-canvas-wrap">
+            <canvas id="chart-${chart.key}"></canvas>
+          </div>
+        </section>
+      `,
+    )
+    .join("");
+
+  target.hidden = false;
+  target.innerHTML = `
+    <section class="dashboard-hero">
+      <div class="dashboard-copy">
+        <p class="dashboard-kicker">BI Visualization</p>
+        <h2 class="dashboard-title">${dashboard.title}</h2>
+        <p class="dashboard-subtitle">${dashboard.subtitle}</p>
+      </div>
+      <div class="dashboard-cards">${cards}</div>
+    </section>
+    <section class="dashboard-charts">${charts}</section>
+  `;
+
+  return dashboard.charts.map((chart) => ({
+    ...chart,
+    element: target.querySelector(`#chart-${chart.key}`),
+  }));
+}
+
 export function createUI(config = {}) {
   const fileInput = resolveElement(config.fileInput ?? "#file-input");
   const parseButton = resolveElement(config.parseButton ?? "#parse-button");
@@ -174,10 +136,41 @@ export function createUI(config = {}) {
   const rowCountText = resolveElement(config.rowCountText ?? "#row-count");
   const fileNameText = resolveElement(config.fileNameText ?? "#file-name");
   const sheetSelect = resolveElement(config.sheetSelect ?? "#sheet-select");
-  const visualizationContainer = resolveElement(
-    config.visualizationContainer ?? "#sheet-visualization",
+  const dashboardContainer = resolveElement(
+    config.dashboardContainer ?? "#sheet-dashboard",
   );
   const tableContainer = resolveElement(config.tableContainer ?? "#data-table");
+
+  const chartInstances = [];
+
+  function destroyCharts() {
+    while (chartInstances.length > 0) {
+      const chart = chartInstances.pop();
+      chart.destroy();
+    }
+  }
+
+  function mountCharts(charts) {
+    destroyCharts();
+
+    if (!window.Chart) {
+      return;
+    }
+
+    charts.forEach((chart) => {
+      if (!chart.element) {
+        return;
+      }
+
+      const instance = new window.Chart(chart.element, {
+        type: chart.type,
+        data: chart.data,
+        options: chart.options,
+      });
+
+      chartInstances.push(instance);
+    });
+  }
 
   function render(state) {
     setText(statusText, state.status, "idle");
@@ -185,7 +178,8 @@ export function createUI(config = {}) {
     setText(rowCountText, state.tableRows.length, "0");
     setText(fileNameText, state.fileName, "No file");
     renderSheetOptions(sheetSelect, state.sheets, state.selectedSheetName);
-    renderVisualization(visualizationContainer, state.visualization);
+    const chartDefs = renderDashboard(dashboardContainer, state.dashboard);
+    mountCharts(chartDefs);
     renderRows(tableContainer, state.tableColumns, state.tableRows);
 
     if (downloadButton) {
@@ -222,7 +216,7 @@ export function createUI(config = {}) {
       downloadButton,
       resetButton,
       sheetSelect,
-      visualizationContainer,
+      dashboardContainer,
     },
     render,
     bindEvents,
